@@ -1,0 +1,96 @@
+
+/* --- Ajuste da Logo --- */
+.logo {
+    max-width: 150px; /* Define um tamanho máximo legal para logo */
+    width: 100%;      /* Garante que ela diminua se a tela for muito pequena */
+    height: auto;     /* Mantém a proporção (não estica a imagem) */
+    display: block;   /* Permite centralizar */
+    margin: 0 auto 15px auto; /* Centraliza horizontalmente e dá espaço embaixo */
+}
+
+/* --- Garanta que a caixa de login tenha flexbox para alinhar tudo --- */
+.login-box {
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+    text-align: center;
+    width: 90%;       /* Melhor para celular que largura fixa */
+    max-width: 320px; /* Trava a largura máxima no PC */
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    
+    /* Flexbox para garantir que tudo fique um embaixo do outro */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+body { margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, sans-serif; overflow: hidden; }
+
+#map { height: 100vh; width: 100%; z-index: 1; }
+
+/* --- TELA DE LOGIN --- */
+.login-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.85); /* Fundo escuro */
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.login-box {
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+    text-align: center;
+    width: 300px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+}
+
+.login-box input {
+    width: 90%;
+    padding: 10px;
+    margin: 15px 0;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 16px;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.login-box button {
+    width: 100%;
+    padding: 10px;
+    background: #2e7d32;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.login-box button:hover { background: #1b5e20; }
+
+/* --- CARD DE INFO (Mantido igual) --- */
+.delivery-info {
+    position: absolute; bottom: 30px; left: 50%;
+    transform: translateX(-50%); width: 90%; max-width: 400px;
+    background: white; padding: 20px; border-radius: 15px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    z-index: 1000; display: flex; align-items: center; gap: 15px;
+}
+
+.driver-avatar {
+    width: 50px; height: 50px; border-radius: 50%;
+    background: #eee url('https://ui-avatars.com/api/?name=Caminhao&background=333&color=fff') center/cover;
+}
+
+.info-text h3 { margin: 0; font-size: 16px; color: #333; }
+.info-text p { margin: 5px 0 0; font-size: 13px; color: #666; }
+.status-badge {
+    background: #e3f2fd; color: #1565c0; padding: 4px 8px;
+    border-radius: 4px; font-size: 11px; font-weight: bold; display: inline-block;
+}
+
+.car-icon { font-size: 30px; line-height: 30px; text-align: center; transition: all 0.5s linear; }

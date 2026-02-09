@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rastreamento em Tempo Real</title>
+    <link rel="icon" type="image/png" href="logo.png">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="login-overlay" class="login-overlay">
+
+<div class="login-box">
+
+<img src="logo.png" alt="Wiu Logo" class="logo">
+
+<h2>Wiu Rastreamento Seguro</h2>
+
+<p>Insira o código de rastreio para visualizar a carga.</p>
+
+<input type="text" id="access-code" placeholder="Código de Acesso" maxlength="6">
+
+<button id="btn-login">Rastrear Carga</button>
+
+<p id="error-msg" style="color: red; display: none; margin-top: 10px;">Código inválido.</p>
+
+</div>
+
+</div>
+
+    <div id="map"></div>
+
+    <div class="delivery-info" id="info-card" style="display: none;"> <div class="driver-avatar"></div>
+        <div class="info-text">
+            <h3>Transporte Rodoviário</h3>
+            <span class="status-badge" id="time-badge">CALCULANDO...</span>
+            <p>Origem: Montes Claros/MG</p>
+            <p>Destino: Maringá/PR</p>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
