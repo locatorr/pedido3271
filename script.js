@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- BANCO DE DADOS DE ROTAS ---
     const ROTAS = {
-        "36070150": {  // <--- SENHA (O PRÓPRIO CEP)
+        "45861": {  // <--- SENHA (O PRÓPRIO CEP)
             id: "rota_jf_mg",
             
             // VISUAL
