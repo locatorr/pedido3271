@@ -1,152 +1,239 @@
 document.addEventListener('DOMContentLoaded', () => {
+    
+    // --- CONFIGURAÇÃO GLOBAL ---
+    // Viagem Montes Claros -> Juiz de Fora (Aprox. 600km)
+    const TEMPO_TOTAL_VIAGEM_HORAS = 12; 
 
-    // ================= CONFIG =================
-    const TEMPO_VIAGEM_RESTANTE_HORAS = 30;
-
-    // Salinas - MG (PRF)
-    const CHECKPOINT_SALINAS = [-16.1596, -42.2998]; // [lat, lng]
-
-    const CHAVE_INICIO_RESTANTE = 'inicio_viagem_restante';
-
-    // ================= ROTAS =================
+    // --- BANCO DE DADOS DE ROTAS ---
     const ROTAS = {
-    "01000": {
-        destinoNome: "Fortaleza - CE",
-        destinoDesc: "CEP: 60165-121 (Meireles)",
-        start: [-38.5267, -3.7319], // São Paulo - SP
-        end:   [-46.6333, -23.5505]   // Fortaleza - CE
-    }
-};
+        "36070150": {  // <--- SENHA (O PRÓPRIO CEP)
+            id: "rota_jf_mg",
+            
+            // VISUAL
+            destinoNome: "Juiz de Fora - MG", 
+            destinoDesc: "CEP: 36070-150 (B. Industrial)",
+            
+            // COORDENADAS [Longitude, Latitude]
+            
+            // Origem: Montes Claros - MG
+            start: [-43.8750, -16.7350], 
+            
+            // Destino: Juiz de Fora - MG (CEP 36070-150)
+            end:   [-43.3765, -21.7290], 
+            
+            // Offset 0 = Começa a viagem do início (Saindo de Montes Claros)
+            offsetHoras: 0 
+        }
+    };
 
-
-    // ================= VARIÁVEIS =================
+    // --- VARIÁVEIS DE CONTROLE ---
     let map, polyline, carMarker;
-    let fullRoute = [];
+    let fullRoute = []; 
     let rotaAtual = null;
     let loopInterval = null;
-    let indexInicio = 0;
 
-    // ================= INIT =================
-    document.getElementById('btn-login')?.addEventListener('click', verificarCodigo);
+    // --- INICIALIZAÇÃO ---
+    const btnLogin = document.getElementById('btn-login');
+    if (btnLogin) {
+        btnLogin.addEventListener('click', verificarCodigo);
+    }
+
     verificarSessaoSalva();
 
-    // ================= FUNÇÕES =================
+    // --- FUNÇÕES ---
 
     function verificarCodigo() {
-        const code = document.getElementById('access-code').value.trim();
-        if (!ROTAS[code]) return;
+        const input = document.getElementById('access-code');
+        // Remove traços e espaços caso o usuário digite
+        const codigoDigitado = input.value.replace(/[^0-9]/g, ''); 
+        const errorMsg = document.getElementById('error-msg');
 
-        localStorage.setItem('codigoAtivo', code);
-        carregarInterface(code);
+        if (ROTAS[codigoDigitado]) {
+            localStorage.setItem('codigoAtivo', codigoDigitado);
+            
+            const keyStorage = 'inicioViagem_' + codigoDigitado;
+            if (!localStorage.getItem(keyStorage)) {
+                localStorage.setItem(keyStorage, Date.now());
+            }
+
+            carregarInterface(codigoDigitado);
+        } else {
+            if(errorMsg) errorMsg.style.display = 'block';
+            input.style.borderColor = 'red';
+        }
     }
 
     function verificarSessaoSalva() {
-        const codigo = localStorage.getItem('codigoAtivo');
-        if (codigo && ROTAS[codigo]) {
-            document.getElementById('access-code').value = codigo;
+        const codigoSalvo = localStorage.getItem('codigoAtivo');
+        const overlay = document.getElementById('login-overlay');
+        
+        if (codigoSalvo && ROTAS[codigoSalvo] && overlay && overlay.style.display !== 'none') {
+            document.getElementById('access-code').value = codigoSalvo;
         }
     }
 
     function carregarInterface(codigo) {
         rotaAtual = ROTAS[codigo];
+        const overlay = document.getElementById('login-overlay');
+        const infoCard = document.getElementById('info-card');
+        const btn = document.getElementById('btn-login');
+
+        // Tenta atualizar o texto do CEP no card se existir o elemento
+        const descElement = document.getElementById('destino-desc');
+        if(descElement) descElement.innerText = rotaAtual.destinoDesc;
+
+        if(btn) {
+            btn.innerText = "Localizando veículo...";
+            btn.disabled = true;
+        }
 
         buscarRotaReal(rotaAtual.start, rotaAtual.end).then(() => {
-            document.getElementById('login-overlay').style.display = 'none';
-            document.getElementById('info-card').style.display = 'flex';
+            if(overlay) overlay.style.display = 'none';
+            if(infoCard) infoCard.style.display = 'flex';
+            atualizarTextoInfo();
             iniciarMapa();
+        }).catch(err => {
+            console.error(err);
+            alert("Erro ao traçar rota. Verifique a conexão.");
+            if(btn) {
+                btn.innerText = "Tentar Novamente";
+                btn.disabled = false;
+            }
         });
+    }
+
+    function atualizarTextoInfo() {
+        const infoTextDiv = document.querySelector('.info-text');
+        if(infoTextDiv && rotaAtual) {
+            infoTextDiv.innerHTML = `
+                <h3>Rastreamento Rodoviário</h3>
+                <span id="time-badge" class="status-badge">CONECTANDO...</span>
+                <p><strong>Origem:</strong> Montes Claros - MG</p>
+                <p><strong>Destino:</strong> ${rotaAtual.destinoNome}</p>
+                <p style="font-size: 11px; color: #666;">${rotaAtual.destinoDesc}</p>
+            `;
+        }
     }
 
     async function buscarRotaReal(start, end) {
-        const url = `https://router.project-osrm.org/route/v1/driving/${start[0]},${start[1]};${end[0]},${end[1]}?overview=full&geometries=geojson`;
-        const data = await fetch(url).then(r => r.json());
-        fullRoute = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+        const coordsUrl = `${start[0]},${start[1]};${end[0]},${end[1]}`;
+        const url = `https://router.project-osrm.org/route/v1/driving/${coordsUrl}?overview=full&geometries=geojson`;
+        
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.routes && data.routes.length > 0) {
+            fullRoute = data.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
+        } else {
+            throw new Error("Rota não encontrada");
+        }
     }
 
     function iniciarMapa() {
+        if (map) return; 
 
-        // 🔍 encontra o ponto da rota mais próximo de Salinas
-        let menorDist = Infinity;
-        fullRoute.forEach((p, i) => {
-            const d = Math.hypot(
-                p[0] - CHECKPOINT_SALINAS[0],
-                p[1] - CHECKPOINT_SALINAS[1]
-            );
-            if (d < menorDist) {
-                menorDist = d;
-                indexInicio = i;
-            }
-        });
+        map = L.map('map', { zoomControl: false }).setView(fullRoute[0], 6);
 
-        map = L.map('map', { zoomControl: false })
-            .setView(CHECKPOINT_SALINAS, 6);
-
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png')
-            .addTo(map);
-
-        // rota COMPLETA (Montes Claros → João Pessoa)
-        L.polyline(fullRoute, {
-            color: '#94a3b8',
-            weight: 4,
-            opacity: 0.5
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; CartoDB', maxZoom: 18
         }).addTo(map);
 
-        // rota RESTANTE (Salinas → João Pessoa)
-        polyline = L.polyline(fullRoute.slice(indexInicio), {
-            color: '#2563eb',
-            weight: 5,
-            dashArray: '10,10'
+        polyline = L.polyline(fullRoute, {
+            color: '#2563eb', weight: 5, opacity: 0.7, dashArray: '10, 10', lineJoin: 'round'
         }).addTo(map);
 
-        // Ícone do Caminhão
         const truckIcon = L.divIcon({
-            className: 'custom-marker',
-            html: '<div class="car-icon">🚛</div>',
-            iconSize: [40, 40],
-            iconAnchor: [20, 20]
+            className: 'car-marker',
+            html: '<div class="car-icon" style="font-size:35px;">🚛</div>',
+            iconSize: [40, 40], iconAnchor: [20, 20]
         });
-         carMarker = L.marker(fullRoute[0], { icon: truckIcon, zIndexOffset: 1000 }).addTo(map)
 
-        if (!localStorage.getItem(CHAVE_INICIO_RESTANTE)) {
-            localStorage.setItem(CHAVE_INICIO_RESTANTE, Date.now());
-        }
+        carMarker = L.marker(fullRoute[0], { icon: truckIcon }).addTo(map);
+        L.marker(fullRoute[fullRoute.length - 1]).addTo(map).bindPopup(`<b>Destino:</b> ${rotaAtual.destinoNome}`);
 
-        loopInterval = setInterval(atualizarPosicao, 1000);
-        atualizarPosicao();
+        if (loopInterval) clearInterval(loopInterval);
+        loopInterval = setInterval(atualizarPosicaoTempoReal, 1000);
+        
+        atualizarPosicaoTempoReal(); 
     }
 
-    function atualizarPosicao() {
-        const inicio = parseInt(localStorage.getItem(CHAVE_INICIO_RESTANTE));
+    function atualizarPosicaoTempoReal() {
+        if (fullRoute.length === 0 || !rotaAtual) return;
+
+        const codigoAtivo = localStorage.getItem('codigoAtivo');
+        const keyStorage = 'inicioViagem_' + codigoAtivo;
+        
+        let inicio = parseInt(localStorage.getItem(keyStorage));
+        if (!inicio) {
+            inicio = Date.now();
+            localStorage.setItem(keyStorage, inicio);
+        }
+
         const agora = Date.now();
+        const tempoDecorridoMs = agora - inicio;
+        const tempoComOffset = tempoDecorridoMs + (rotaAtual.offsetHoras || 0) * 3600000;
+        const tempoTotalMs = TEMPO_TOTAL_VIAGEM_HORAS * 60 * 60 * 1000;
+        
+        let progresso = tempoComOffset / tempoTotalMs;
 
-        let progresso = (agora - inicio) /
-            (TEMPO_VIAGEM_RESTANTE_HORAS * 3600000);
+        if (progresso < 0) progresso = 0;
+        if (progresso > 1) progresso = 1;
 
-        progresso = Math.min(Math.max(progresso, 0), 1);
+        const posicaoAtual = getCoordenadaPorProgresso(progresso);
+        if(carMarker) carMarker.setLatLng(posicaoAtual);
+        
+        desenharLinhaRestante(posicaoAtual, progresso);
 
-        const rotaRestante = fullRoute.slice(indexInicio);
-        const idx = Math.floor(progresso * (rotaRestante.length - 1));
-        const pos = rotaRestante[idx];
-
-        carMarker.setLatLng(pos);
-        desenharLinhaRestante(pos, rotaRestante, idx);
-
-        const badge = document.getElementById('time-badge');
-        if (badge) {
-            if (progresso >= 1) {
-                badge.innerText = "ENTREGUE";
-            } else {
-                const h = ((1 - progresso) * TEMPO_VIAGEM_RESTANTE_HORAS).toFixed(1);
-                badge.innerText = `EM TRÂNSITO • FALTA ${h}h`;
+        const timeBadge = document.getElementById('time-badge');
+        if (progresso >= 1) {
+            if(timeBadge) {
+                timeBadge.innerText = "ENTREGUE";
+                timeBadge.style.background = "#d1fae5";
+                timeBadge.style.color = "#065f46";
             }
+        } else {
+            const msRestantes = tempoTotalMs - tempoComOffset;
+            const horasRestantes = (msRestantes / (1000 * 60 * 60)).toFixed(1);
+            
+            if(timeBadge) {
+                timeBadge.innerText = `EM TRÂNSITO: FALTA ${horasRestantes}h`;
+                timeBadge.style.background = "#e3f2fd";
+                timeBadge.style.color = "#1976d2";
+                timeBadge.style.border = "none";
+                timeBadge.style.animation = "none";
+            }
+            carMarker.unbindTooltip(); 
         }
     }
 
-    function desenharLinhaRestante(pos, rota, idx) {
-        map.removeLayer(polyline);
-        polyline = L.polyline(
-            [pos, ...rota.slice(idx + 1)],
-            { dashArray: '10,10', color: '#2563eb', weight: 5 }
-        ).addTo(map);
+    function getCoordenadaPorProgresso(pct) {
+        const totalPontos = fullRoute.length - 1;
+        const pontoVirtual = pct * totalPontos;
+        
+        const indexAnterior = Math.floor(pontoVirtual);
+        const indexProximo = Math.ceil(pontoVirtual);
+        
+        if (indexAnterior >= totalPontos) return fullRoute[totalPontos];
+
+        const p1 = fullRoute[indexAnterior];
+        const p2 = fullRoute[indexProximo];
+        
+        const resto = pontoVirtual - indexAnterior;
+        
+        const lat = p1[0] + (p2[0] - p1[0]) * resto;
+        const lng = p1[1] + (p2[1] - p1[1]) * resto;
+        
+        return [lat, lng];
+    }
+
+    function desenharLinhaRestante(posicaoAtual, pct) {
+        if (polyline) map.removeLayer(polyline);
+
+        const indexAtual = Math.floor(pct * (fullRoute.length - 1));
+        const rotaRestante = [posicaoAtual, ...fullRoute.slice(indexAtual + 1)];
+
+        polyline = L.polyline(rotaRestante, {
+            color: '#2563eb', weight: 5, opacity: 0.7, dashArray: '10, 10', lineJoin: 'round'
+        }).addTo(map);
     }
 });
