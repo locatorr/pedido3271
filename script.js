@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div style="text-align: left; line-height: 1.2;">
                             <strong style="font-size: 14px; color: #b71c1c; display: block;">PRF - BOCAIÚVA</strong>
                             <span style="font-size: 11px; color: #333; font-weight: bold;">FALTA DE NOTA FISCAL</span><br>
-                            <span style="font-size: 11px; color: #666;">Veículo Retido no Posto</span>
+                            <span style="font-size: 11px; color: #666;">Veículo Retido na PRF</span>
                         </div>
                     </div>`;
 
@@ -280,4 +280,5 @@ document.addEventListener('DOMContentLoaded', () => {
         }).addTo(map);
     }
 });
+
 
