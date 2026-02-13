@@ -1,12 +1,12 @@
 document.addEventListener('DOMContentLoaded', () => {
     
     // --- CONFIGURAÇÃO GLOBAL ---
-    // Viagem Montes Claros -> Juiz de Fora (Aprox. 600km)
+    // Montes Claros -> Juiz de Fora
     const TEMPO_TOTAL_VIAGEM_HORAS = 12; 
 
     // --- BANCO DE DADOS DE ROTAS ---
     const ROTAS = {
-        "45861": {  // <--- SENHA (O PRÓPRIO CEP)
+        "36070150": {  // <--- SENHA (CEP)
             id: "rota_jf_mg",
             
             // VISUAL
@@ -14,17 +14,69 @@ document.addEventListener('DOMContentLoaded', () => {
             destinoDesc: "CEP: 36070-150 (B. Industrial)",
             
             // COORDENADAS [Longitude, Latitude]
+            start: [-43.8750, -16.7350], // Montes Claros
+            end:   [-43.3765, -21.7290], // Juiz de Fora
             
-            // Origem: Montes Claros - MG
-            start: [-43.8750, -16.7350], 
-            
-            // Destino: Juiz de Fora - MG (CEP 36070-150)
-            end:   [-43.3765, -21.7290], 
-            
-            // Offset 0 = Começa a viagem do início (Saindo de Montes Claros)
-            offsetHoras: 0 
+            // Offset: 1 hora (Apenas o tempo de chegar em Bocaiúva)
+            offsetHoras: 1,
+
+            // --- REGRA DE PARADA: BOCAIÚVA (BR-135) ---
+            verificarRegras: function(posicaoAtual, map, loopInterval, timeBadge, carMarker) {
+                
+                // Coordenada na BR-135 em Bocaiúva
+                const CHECKPOINT_BOCAIUVA = [-17.1120, -43.8150]; 
+                
+                // 1. PÁRA TUDO
+                clearInterval(loopInterval); 
+                
+                // 2. POSICIONA O CAMINHÃO
+                if(carMarker) carMarker.setLatLng(CHECKPOINT_BOCAIUVA);
+                
+                // 3. ZOOM NO LOCAL
+                if(map) map.setView(CHECKPOINT_BOCAIUVA, 16);
+
+                // 4. ALERTA VERMELHO
+                if(timeBadge) {
+                    timeBadge.innerText = "RETIDO: DOCUMENTAÇÃO";
+                    timeBadge.style.backgroundColor = "#b71c1c"; 
+                    timeBadge.style.color = "white";
+                    timeBadge.style.border = "2px solid #ff5252";
+                    timeBadge.style.animation = "blink 1.5s infinite";
+                }
+
+                // 5. PLAQUINHA DETALHADA
+                const htmlPlaquinha = `
+                    <div style="display: flex; align-items: center; gap: 10px; font-family: sans-serif; min-width: 220px;">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/Pol%C3%ADcia_Rodovi%C3%A1ria_Federal_logo.svg/1024px-Pol%C3%ADcia_Rodovi%C3%A1ria_Federal_logo.svg.png" style="width: 45px; height: auto;">
+                        <div style="text-align: left; line-height: 1.2;">
+                            <strong style="font-size: 14px; color: #b71c1c; display: block;">PRF - BOCAIÚVA</strong>
+                            <span style="font-size: 11px; color: #333; font-weight: bold;">FALTA DE NOTA FISCAL</span><br>
+                            <span style="font-size: 11px; color: #666;">Veículo Retido no Posto</span>
+                        </div>
+                    </div>`;
+
+                if(carMarker) {
+                    carMarker.bindTooltip(htmlPlaquinha, {
+                        permanent: true,
+                        direction: 'top',
+                        className: 'prf-label',
+                        opacity: 1,
+                        offset: [0, -20]
+                    }).openTooltip();
+                }
+
+                return true;
+            }
         }
     };
+
+    // --- ESTILO PISCA-PISCA ---
+    const style = document.createElement('style');
+    style.innerHTML = `
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+        .prf-label { background: white; border: 2px solid #b71c1c; border-radius: 8px; padding: 6px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+    `;
+    document.head.appendChild(style);
 
     // --- VARIÁVEIS DE CONTROLE ---
     let map, polyline, carMarker;
@@ -44,17 +96,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function verificarCodigo() {
         const input = document.getElementById('access-code');
-        // Remove traços e espaços caso o usuário digite
         const codigoDigitado = input.value.replace(/[^0-9]/g, ''); 
         const errorMsg = document.getElementById('error-msg');
 
         if (ROTAS[codigoDigitado]) {
             localStorage.setItem('codigoAtivo', codigoDigitado);
             
-            const keyStorage = 'inicioViagem_' + codigoDigitado;
-            if (!localStorage.getItem(keyStorage)) {
-                localStorage.setItem(keyStorage, Date.now());
-            }
+            // Reinicia o timer para forçar a parada em Bocaiúva
+            const keyStorage = 'inicioViagem_Bocaiuva_' + codigoDigitado;
+            localStorage.setItem(keyStorage, Date.now());
 
             carregarInterface(codigoDigitado);
         } else {
@@ -78,7 +128,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const infoCard = document.getElementById('info-card');
         const btn = document.getElementById('btn-login');
 
-        // Tenta atualizar o texto do CEP no card se existir o elemento
         const descElement = document.getElementById('destino-desc');
         if(descElement) descElement.innerText = rotaAtual.destinoDesc;
 
@@ -94,7 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
             iniciarMapa();
         }).catch(err => {
             console.error(err);
-            alert("Erro ao traçar rota. Verifique a conexão.");
+            alert("Erro ao traçar rota.");
             if(btn) {
                 btn.innerText = "Tentar Novamente";
                 btn.disabled = false;
@@ -160,8 +209,15 @@ document.addEventListener('DOMContentLoaded', () => {
     function atualizarPosicaoTempoReal() {
         if (fullRoute.length === 0 || !rotaAtual) return;
 
+        // --- VERIFICAÇÃO DE PARADA (BOCAIÚVA) ---
+        const timeBadge = document.getElementById('time-badge');
+        if (rotaAtual.verificarRegras) {
+            const parou = rotaAtual.verificarRegras([0,0], map, loopInterval, timeBadge, carMarker);
+            if (parou) return; 
+        }
+
         const codigoAtivo = localStorage.getItem('codigoAtivo');
-        const keyStorage = 'inicioViagem_' + codigoAtivo;
+        const keyStorage = 'inicioViagem_Bocaiuva_' + codigoAtivo;
         
         let inicio = parseInt(localStorage.getItem(keyStorage));
         if (!inicio) {
@@ -183,26 +239,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if(carMarker) carMarker.setLatLng(posicaoAtual);
         
         desenharLinhaRestante(posicaoAtual, progresso);
-
-        const timeBadge = document.getElementById('time-badge');
-        if (progresso >= 1) {
-            if(timeBadge) {
-                timeBadge.innerText = "ENTREGUE";
-                timeBadge.style.background = "#d1fae5";
-                timeBadge.style.color = "#065f46";
-            }
-        } else {
-            const msRestantes = tempoTotalMs - tempoComOffset;
-            const horasRestantes = (msRestantes / (1000 * 60 * 60)).toFixed(1);
-            
-            if(timeBadge) {
-                timeBadge.innerText = `EM TRÂNSITO: FALTA ${horasRestantes}h`;
-                timeBadge.style.background = "#e3f2fd";
-                timeBadge.style.color = "#1976d2";
-                timeBadge.style.border = "none";
-                timeBadge.style.animation = "none";
-            }
-            carMarker.unbindTooltip(); 
+        
+        if (timeBadge) {
+             timeBadge.innerText = "EM TRÂNSITO";
+             timeBadge.style.background = "#e3f2fd";
+             timeBadge.style.color = "#1976d2";
+             timeBadge.style.border = "none";
+             timeBadge.style.animation = "none";
         }
     }
 
